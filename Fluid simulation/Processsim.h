@@ -27,7 +27,7 @@ public:
 			{
 			case '1':
 				k = 1;
-				T1 = 2;
+				T1 = 1;
 				Td = 0;
 				startup = false;
 				break;
@@ -55,7 +55,7 @@ public:
 			deadtimechanged = false;
 		}
 		Time_step = Time_step / 60.0f;// timestep must be in minutes
-		float differance = (Co * k - localPv);
+		float differance = ((Co * k) - localPv);
 		
 		if (process == '1')//first order and/or deadtime
 		{

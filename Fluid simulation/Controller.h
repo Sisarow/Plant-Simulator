@@ -23,13 +23,13 @@ public:
 	// Used to change the control veribles dynamicly
 	float guessed_Kp, guessed_KpT1, guessed_KpTd;
 
-	float max_devation = 0.05;
+	float max_devation = 0.03; // devation that allows a plant gain guess less = more accurate but guesses less often and noise may become a pproblem.0
 	float max_points = 100, actualpoint_count = 0;
 	float prev_Pv = 0, prev_Co = 0;
 	float counter = 0;
 
 	float Sp = 50, Co = 0, Pv = 0, Mo = 0;
-	float Gain = 1, TI = 0, TD = 0;
+	float Gain = 1, TI = 1, TD = 0;
 	float prev_error = 0, oldintergrated = 0, prev_Sp = 0;
 	float timepoint; //stores the amount of points remembered.
 	std::vector<Remebered_Data> points;
@@ -49,6 +49,7 @@ public:
 			{
 				Mo = Co;
 				prev_Sp = Sp;
+				oldintergrated = Mo;
 			}
 			if (TI == 0)
 			{
@@ -66,7 +67,7 @@ public:
 
 
 			float derivitive = (kc * kd * ((error - prev_error) / ((Timestep/60)-0)));
-			float intergrated = oldintergrated + (kc * ki * error * (Timestep / 60));
+			float intergrated = oldintergrated + (1 * ki * error * (Timestep / 60));
 
 			Co = ((kc * error) + (intergrated) + (derivitive)); // this is the equation for the gain only component of the controller.
 
@@ -89,10 +90,13 @@ public:
 			if (Co > 100)
 			{
 				Co = 100;
+				oldintergrated = 100;
 			}
 			if (Co < 0)
 			{
 				Co = 0;
+				oldintergrated = 0;
+
 			}
 		}
 		else
@@ -108,8 +112,8 @@ private:
 		points[actualpoint_count].Pv = Pv;
 		points[actualpoint_count].Sp = Sp;
 		points[actualpoint_count].Co = Co;
-		points[actualpoint_count].Pv_slope = ((Pv - prev_Pv / timestep));
-		points[actualpoint_count].Co_slope = ((Co - prev_Co / timestep));
+		points[actualpoint_count].Pv_slope = (((Pv - prev_Pv) / timestep));
+		points[actualpoint_count].Co_slope = (((Co - prev_Co) / timestep));
 		points[actualpoint_count].kc = Gain;
 		points[actualpoint_count].point_number = actualpoint_count;
 
@@ -128,36 +132,39 @@ private:
 		{
 			float total_slope_Pv = 0;
 			float total_slope_Co = 0;
-			if (point.point_number >= 10 && point.point_number <= max_points - 10)
+			if (point.point_number >= 10 && point.point_number <= max_points - 11) //adds the slopes of 20 points and saves it for analysis.
 			{
 				for (int i = 0; i < 20; i++)
 				{
-					if (i <= 10)
+					bool tested = false;
+					if (i <= 10 && !tested)
 					{
 						total_slope_Pv += points[point.point_number - i].Pv_slope;
 					}
-					if (i > 10)
+					if (i > 10 && !tested)
 					{
 						total_slope_Pv += points[point.point_number + (i-10)].Pv_slope;
 					}
-					if (i == 19)
+					if (i == 19 && !tested)
 					{
 						total_slope_Pv += points[point.point_number + 10].Pv_slope;
 					}
-					if (i <= 10)
+					if (i <= 10 && !tested)
 					{
 						total_slope_Co += points[point.point_number - i].Co_slope;
 					}
-					if (i > 10)
+					if (i > 10 && !tested)
 					{
 						total_slope_Co += points[point.point_number + (i - 10)].Co_slope;
 					}
-					if (i == 19)
+					if (i == 19 && !tested)
 					{
 						total_slope_Co += points[point.point_number + 10].Co_slope;
 					}
 				}
-				if (total_slope_Pv < max_devation && total_slope_Pv > -max_devation)
+				total_slope_Pv /= 20;
+				total_slope_Co /= 20;
+				if (total_slope_Pv < max_devation && total_slope_Pv > -max_devation) //if slope of the 20 points are within the devation then the controller will guess the plant gain.
 				{
 					if (total_slope_Co < max_devation && total_slope_Co > -max_devation)
 					{

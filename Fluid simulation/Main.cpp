@@ -421,6 +421,8 @@ void IMGUI_FRAME(int currentpointpos)
 		ImGui::Begin("Debug Window"); // Create a window for the process.
 
 		ImGui::Text("Mo: %0.3f", controlPTR->Mo);
+
+		ImGui::Text("Guessed Kp: %0.3f", controlPTR->guessed_Kp);
 		
 		ImGui::End();
 	}
