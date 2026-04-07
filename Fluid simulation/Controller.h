@@ -271,7 +271,6 @@ private:
 		double Q = 2.5;   // Tracking penalty
 
 		// Note: Because B_N accumulates over N steps, its value is much larger than b1.
-		// You must increase R substantially compared to the 1-step version to maintain stability.
 		double R = 0.005;
 
 		double previous_u = MPCCo;

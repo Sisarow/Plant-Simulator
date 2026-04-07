@@ -82,14 +82,14 @@ public:
 	{
 		limit_checks();
 
-        // 1. Pack the struct into a 12x1 Eigen Vector for clean RK4 math
+        // Pack the struct into a 12x1 Eigen Vector for clean RK4 math
         Eigen::Matrix<double, 12, 1> StateVec;
         StateVec << state.u, state.v, state.w,
             state.p, state.q, state.r,
             state.phi, state.theta, state.psi,
             state.x, state.y, state.z;
 
-        // 2. Perform 4th-Order Runge-Kutta Integration
+        // Perform 4th-Order Runge-Kutta Integration
         Eigen::Matrix<double, 12, 1> k1 = get_derivatives(StateVec, controls);
         Eigen::Matrix<double, 12, 1> k2 = get_derivatives(StateVec + (dt / 2.0) * k1, controls);
         Eigen::Matrix<double, 12, 1> k3 = get_derivatives(StateVec + (dt / 2.0) * k2, controls);
@@ -98,7 +98,7 @@ public:
         StateVec += (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4);// 4. Wrap Euler angles between -PI and PI so they don't count infinitely
         
 
-        // 3. Unpack back to the struct so UI/Graphing tools can read it better
+        // Unpack back to the struct so UI/Graphing tools can read it better
         state.u = StateVec(0); state.v = StateVec(1); state.w = StateVec(2);
         state.p = StateVec(3); state.q = StateVec(4); state.r = StateVec(5);
         state.phi = wrap_angle_pi(StateVec(6));
