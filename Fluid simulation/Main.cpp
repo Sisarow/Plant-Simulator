@@ -12,6 +12,7 @@
 #include "Utility.h" // used for rendering stuffs. also contains some usefull fuctions and stucts.
 #include "Object.h" //used for other classes like graph or backround objects or other rendered stuff which is less important.
 #include "Controller.h" //used for creating and running the controller 
+#include "SimView.h" //used to manage the child window for the plane simuator.
 #include <iostream>
 #include <cmath>
 #include <thread>
@@ -19,18 +20,24 @@
 
 void framebuffer_size_callback(GLFWwindow*, int, int);
 void mousescrollcallback(GLFWwindow*, double, double);
-void processInput(GLFWwindow*);
+void processInput(GLFWwindow*, GLFWwindow*);
 void mouseclickcallback(GLFWwindow*, int, int, int);
+void Test_Master(int Point_pos);
+
 void IMGUI_FRAME(int);
 int monitorWidth, monitorHeight, monitoroffset = 0;
 bool camdetached = false;
 
-const unsigned int max_number_of_points = 4000000000; //defaut is 1 billion points which will make sure memory is not run out during operation.
+bool testingmode = false;
+
+const unsigned int max_number_of_points = 200000; //defaut is 300000 points which will make sure memory is not run out during operation.
 float timestep = 0.010; // desired time step for desred accuacy of simulation (also can affect simulation speed!). 
 float camx = -90, camy = -50, camz = 0, zoom = 10; // for camera stuffs
 float deltatime, prevtime; // for finding time between frames.
 Processsim* ProcessPTR;
 Controller* controlPTR;
+Controller* controlPTR2;
+Controller* controlPTR3;
 std::vector<Point_Data> point;
 
 double cursorposx, cursorposy;
@@ -42,15 +49,123 @@ double absoluteflagposf4 = 0;
 double absoluteflagposf5 = 0;
 double absoluteflagposf6 = 0;
 
+
+GLFWwindow* simview_window = NULL;
+bool childshouldclose = true;
+char type_of_test = NULL; //for test type
+bool run = true;
+
 int main()
 {
+	std::thread second_window;
+
 	//Setup of Process simulator and Controller.
 	Processsim Process1;
 	ProcessPTR = &Process1;
 
 	//setup of controller.
-	Controller controller1;
+	Controller controller1, controller2, controller3;
+	controller1.Sp = 50;
+	controller1.Co = 50.49;
+	controller1.Gain = 0.010;
+	controller1.TI = 0.03;
+	controller1.oldintergrated = 50.488930;
+	controller1.smart = false;
+
+
+	controller2.Gain = 0.1; //carefull of gain since feedback noise exsists.
+	controller2.TI = 0.05; //need fast tau  for good control
+	controller2.TD = 0.0;
+	controller2.Sp = 50.49;
+	controller2.Co = 49.85;
+	controller2.oldintergrated = 49.852482;
+	controller2.direct_acting = true;
+
+	controller3.Sp = 45;
+	controller3.Co = 19.90;
+	controller3.oldintergrated = 19.903376;
+	controller3.TI = 0.2;
+	controller3.Gain = 6;
+
 	controlPTR = &controller1;
+	controlPTR2 = &controller2;
+	controlPTR3 = &controller3;
+
+	if (Process1.process == '3')
+	{
+		bool incorrect = true;
+		do
+		{
+			printf("Enable Testing Mode? (Y/N)\n");
+			char input;
+			std::cin >> input;
+			if (input == 'Y' || input == 'y')
+			{
+				printf("Enabled!\n");
+				testingmode = true;
+				incorrect = false;
+			}
+			else if (input == 'N' || input == 'n')
+			{
+				printf("Disabled!\n");
+				incorrect = false;
+			}
+			else
+			{
+				printf("Incorrect input\nTry again.");
+			}
+
+		} while (incorrect);
+
+		if (testingmode)
+		{
+			printf("Please select the type of Test:\n-------------------------------\n");
+			printf("1 = (Regular cascade test)\n");
+			printf("2 = (smart controller cascade test type B (minimal learning))\n");
+			printf("3 = (smart controller cascade test type A (moderate learning))\n");
+			printf("4 = (smart controller cascade test type SS (higher learning))\n");
+			printf("5 = (smart controller cascade test type L (defult learning == no runtime learning but still smart. Pre-trained/tuned))\n");
+			std::cin >> type_of_test;
+			switch (type_of_test)
+			{
+			case '1':
+				controller1.Gain = 1.3;
+				controller1.TI = 7.0;
+				controller1.oldintergrated = 50.488930;
+				controller1.smart = false;
+				break;
+			case '2':
+				controller1.Gain = 0.010;
+				controller1.TI = 0.03;
+				controller1.oldintergrated = 50.488930;
+				controller1.smart = true;
+				break;
+			case '3':
+				controller1.Gain = 0.010;
+				controller1.TI = 0.02;
+				controller1.oldintergrated = 50.488930;
+				controller1.smart = true;
+				break;
+			case '4':
+				controller1.Gain = 0.010;
+				controller1.TI = 0.02;
+				controller1.oldintergrated = 50.488930;
+				controller1.smart = true;
+				break;
+			case '5':
+				controller1.Gain = 0.010;
+				controller1.TI = 0.03;
+				controller1.oldintergrated = 50.488930;
+				controller1.smart = true;
+				controller1.enable_RLS = false;
+				break;
+			default:
+				printf("Please enter another number.\n");
+				break;
+			}
+
+		}
+	}
 
 	//window and other things below.
 	glfwInit();
@@ -69,11 +184,19 @@ int main()
 		glfwTerminate();
 		return 1;
 	}
+	if (Process1.process == '3')
+	{
+		simview_window = glfwCreateWindow(monitorWidth, monitorHeight, "SimView", NULL, window);//creates window and sizes it to device monitor size.
+		childshouldclose = false;
+		glfwHideWindow(simview_window);
+		second_window = std::thread(Child_window);
+	}
 
 	glfwMakeContextCurrent(window);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);//allows resizing of the window.
 	glfwSetScrollCallback(window, mousescrollcallback); // sets scroll callback for mouse.
 	glfwSetMouseButtonCallback(window, mouseclickcallback);
+	glfwSwapInterval(0);
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))//error message 2.
 	{
 		std::cout << "Failed to initialize GLAD" << std::endl;
@@ -97,7 +220,7 @@ int main()
 	{
 	0.0, 0.0, 0.0, 0.4, 0.4, 0.4, //format X Y Z R G B
 	10.0, 0.0, 0.0, 0.4, 0.4, 0.4,
-	10.0, 10.0, 0.0, 0.4, 0.4, 0.4,
+	10.0, 10.0, 0.0, 0.4, 0.4, 0.4,    
 	0.0, 10.0, 0.0, 0.4, 0.4, 0.4
 	};
 	Graph graph1(GRAPH_VERTICES, 4, sizeof(GRAPH_VERTICES));// creates a graph to be used and rendered.
@@ -131,6 +254,15 @@ int main()
 	viewtransform = glm::translate(transform, glm::vec3(camx, camy, camz)); // view tranform reverced from expected values for directions
 	projectiontransform = glm::ortho(-(monitorWidth/2) / zoom, (monitorWidth / 2) / zoom, -(monitorHeight / 2) / zoom, (monitorHeight / 2) / zoom);// width and height of graph and stuff.
 
+
+
+	plotline Pv2(max_number_of_points, 1.0, 0.6549, 0.0);
+	plotline Co2(max_number_of_points, (199.0 / 255.0), (44.0/255.0), (161.0/255.0));
+	//plotline Sp2(max_number_of_points, 0.6, 0.9, 0.2);
+	//plotline test1(max_number_of_points, 1.0, 1.0, 0);
+	//plotline test2(max_number_of_points, 0.0,0.0, 0.0);
+	//plotline test3(max_number_of_points, 1.0, 0.0, 1.0);
+
 	while (!glfwWindowShouldClose(window))
 	{
 
@@ -139,11 +271,11 @@ int main()
 
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);//screen color R, G, B, A
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		processInput(window);// process inputs from keyboard.
+		processInput(window, simview_window);// process inputs from keyboard.
 
 		if (!camdetached)
 		{
-			camx = -(Pvl.point_pos_step * timestep) + 90;
+			camx = -(point.size() * timestep) + 90;
 		}
 		if (camx > -90)
 		{
@@ -175,14 +307,21 @@ int main()
 		testflag = glm::translate(transform, glm::vec3(absoluteflagposf6, 0.0f, 0.0f));
 		F6.render(shader1, Transformations{ testflag,viewtransform,projectiontransform });
 
+		//exchange values for next frames calculations
+
+		Process1.Co = controller2.Co;
+		controller2.Pv = (((Process1.state.theta * 180 / 3.141592653589) - -20) / 40) * 100;
+		controller2.Sp = controller1.Co;
+		controller1.Pv = (-Process1.state.z / 20000) * 100;
+
+		controller3.Pv = (Process1.state.u / 200) * 100;
+		Process1.throttle = (controller3.Co / 100) * 5;
+
 		//update process and controller
 		Process1.Update(timestep);
 		controller1.Update(timestep);
-
-		//exchange values for next frames calculations
-
-		Process1.Co = controller1.Co;
-		controller1.Pv = Process1.Pv;
+		controller2.Update(timestep);
+		controller3.Update(timestep);
 
 		size_t current_data_index = point.size() + 1;
 
@@ -190,20 +329,39 @@ int main()
 		Spl.render(shader1, Transformations{ modeltransform,viewtransform,projectiontransform }, timestep, controller1.Sp, current_data_index);
 		Col.render(shader1, Transformations{ modeltransform,viewtransform,projectiontransform }, timestep, controller1.Co, current_data_index);
 		Pvl.render(shader1, Transformations{ modeltransform,viewtransform,projectiontransform }, timestep, Process1.Pv, current_data_index);
-		
+		//Sp2.render(shader1, Transformations{ modeltransform,viewtransform,projectiontransform }, timestep, controller2.Sp, current_data_index);
+		Co2.render(shader1, Transformations{ modeltransform,viewtransform,projectiontransform }, timestep, controller2.Co, current_data_index);
+		Pv2.render(shader1, Transformations{ modeltransform,viewtransform,projectiontransform }, timestep, (((Process1.state.theta * 180 / 3.141592653589) - -20) / 40) * 100, current_data_index);
+
+		//test1.render(shader1, Transformations{ modeltransform,viewtransform,projectiontransform }, timestep, controller3.Pv, current_data_index);
+		//test2.render(shader1, Transformations{ modeltransform,viewtransform,projectiontransform }, timestep, controller3.Co, current_data_index);
+		//test3.render(shader1, Transformations{ modeltransform,viewtransform,projectiontransform }, timestep, controller3.Sp, current_data_index);
+
 		current_data_index += -1;
 		//collect data for use later/retreving.
 		point.emplace_back();
 		point[current_data_index].PVv = Process1.Pv;
 		point[current_data_index].Cov = controller1.Co;
 		point[current_data_index].Spv = controller1.Sp;
-		/* The code above is not able to be finished untill the controller and process is finsihed. */
+		point[current_data_index].a1 = controller1.theta[0];
+		point[current_data_index].b1 = controller1.theta[1];
+		point[current_data_index].c1 = controller1.theta[2];
+		point[current_data_index].error = controller1.errorsaved;
+		point[current_data_index].prediction = controller1.predictionsaved;
 
 		IMGUI_FRAME(current_data_index); // call the frame for the GUI/GUIs.
 
 		//swap buffers and poll IO events (key pressed mouse moved etc)
 		glfwSwapBuffers(window);
 		glfwPollEvents();
+		if (testingmode)
+		{
+			Test_Master(current_data_index);
+		}
+	}
+	if (second_window.joinable())
+	{
+		second_window.join();
 	}
 	glfwTerminate();
 	return 1;
@@ -215,7 +373,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 	monitorWidth = width;
 	monitorHeight = height;
 }
-void processInput(GLFWwindow* window) // handles standard keyboard presses.
+void processInput(GLFWwindow* window, GLFWwindow* sim_window) // handles standard keyboard presses.
 {
 	ImGuiIO& io = ImGui::GetIO();
 	if (io.WantCaptureKeyboard) //prevents the below inputs from regestering if the fields in the gui are being edited.
@@ -224,7 +382,21 @@ void processInput(GLFWwindow* window) // handles standard keyboard presses.
 	}
 	float camspeed = 100.0f * deltatime;
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+	{
 		glfwSetWindowShouldClose(window, true);
+		if (sim_window != NULL)
+		{
+			childshouldclose = true;
+		}
+	}
+	if (sim_window != NULL)
+	{
+		if (glfwGetKey(sim_window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+		{
+			glfwSetWindowShouldClose(sim_window, true);
+			glfwHideWindow(sim_window);
+		}
+	}
 		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)//beta camera feature for the program
 		{
 			camy = camy + -camspeed / (zoom * 0.2);
@@ -271,6 +443,16 @@ void processInput(GLFWwindow* window) // handles standard keyboard presses.
 	{
 		absoluteflagposf6 = Getworldposfrommouse(window, zoom, timestep, cursorposx, cursorposy, camx, monitorWidth, monitorHeight, monitoroffset);
 	}
+	if (glfwGetKey(window, GLFW_KEY_7) == GLFW_PRESS && simview_window != NULL)
+	{
+
+		glfwSetWindowShouldClose(sim_window, false);
+		glfwShowWindow(sim_window);
+	}
+	if (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS)
+	{
+		run = true;
+	}
 }
 void mousescrollcallback(GLFWwindow*, double xoffset, double yoffset)//deals with scrolling so mouse can be used.
 {
@@ -305,7 +487,7 @@ void IMGUI_FRAME(int currentpointpos)
 		ImGui::Text("This is the value of the point at the flags");
 
 		count = findcount(timestep, currentpointpos, absoluteflagposf1);
-		ImGui::Text("F1\nCount: %i, Pv: %0.2f, Co: %0.2f, Sp: %0.2f", count, point[count].PVv, point[count].Cov, point[count].Spv);
+		ImGui::Text("F1\nCount: %i, Pv: %0.2f, Co: %0.2f, Sp: %0.2f    %0.4f %0.4f %0.4f   %0.4f %0.4f", count, point[count].PVv, point[count].Cov, point[count].Spv, point[count].a1, point[count].b1, point[count].c1, point[count].error, point[count].prediction);
 
 		ImGui::InputDouble("Time (sec) 1", &absoluteflagposf1, timestep, 1, "%0.3f");
 		count = findcount(timestep, currentpointpos, absoluteflagposf2);
@@ -370,17 +552,17 @@ void IMGUI_FRAME(int currentpointpos)
 
 		ImGui::Text("Kc(Gain)  |  TI(Intergral)  |  TD(Derivative)");
 		ImGui::SameLine();
-		ImGui::Text("Pv |  Co  |  Sp");
+		ImGui::Text("	Co  |  Sp");
 
 		ImGui::SetNextItemWidth(70);
-		ImGui::InputFloat("##c1", &kc, 0, 0, "%0.1f");
+		ImGui::InputFloat("##c1", &kc, 0, 0, "%0.3f");
 		if (ImGui::IsItemDeactivatedAfterEdit()) // used to only update value when enter key is pressed or when user clicks away from screen.
 		{
 			controlPTR->Gain = kc;
 		}
 		ImGui::SetNextItemWidth(120);
 		ImGui::SameLine();
-		ImGui::InputFloat("##c2", &TI, 0, 0, "%0.1f");
+		ImGui::InputFloat("##c2", &TI, 0, 0, "%0.3f");
 		if (ImGui::IsItemDeactivatedAfterEdit()) // used to only update value when enter key is pressed or when user clicks away from screen.
 		{
 			controlPTR->TI = TI;
@@ -388,7 +570,7 @@ void IMGUI_FRAME(int currentpointpos)
 
 		ImGui::SetNextItemWidth(110);
 		ImGui::SameLine();
-		ImGui::InputFloat("##c3", &TD, 0, 0, "%0.1f");
+		ImGui::InputFloat("##c3", &TD, 0, 0, "%0.3f");
 		if (ImGui::IsItemDeactivatedAfterEdit()) // used to only update value when enter key is pressed or when user clicks away from screen.
 		{
 			controlPTR->TD = TD;
@@ -413,19 +595,190 @@ void IMGUI_FRAME(int currentpointpos)
 		ImGui::Checkbox("Controller Mode | Check = AUTO", &controlPTR->AUTO);
 		ImGui::SameLine();
 		ImGui::Checkbox("Controller Action | Check = direct acting", &controlPTR->direct_acting);
+
+		//2nd controller
+		static float kc2 = controlPTR2->Gain, TI2 = controlPTR2->TI, TD2 = controlPTR2->TD;
+		ImGui::Text("Kc(Gain)  |  TI(Intergral)  |  TD(Derivative)");
+		ImGui::SameLine();
+		ImGui::Text("	Co  |  Sp");
+
+		ImGui::SetNextItemWidth(70);
+		ImGui::InputFloat("##c12", &kc2, 0, 0, "%0.3f");
+		if (ImGui::IsItemDeactivatedAfterEdit()) // used to only update value when enter key is pressed or when user clicks away from screen.
+		{
+			controlPTR2->Gain = kc2;
+		}
+		ImGui::SetNextItemWidth(120);
+		ImGui::SameLine();
+		ImGui::InputFloat("##c22", &TI2, 0, 0, "%0.3f");
+		if (ImGui::IsItemDeactivatedAfterEdit()) // used to only update value when enter key is pressed or when user clicks away from screen.
+		{
+			controlPTR2->TI = TI2;
+		}
+
+		ImGui::SetNextItemWidth(110);
+		ImGui::SameLine();
+		ImGui::InputFloat("##c32", &TD2, 0, 0, "%0.3f");
+		if (ImGui::IsItemDeactivatedAfterEdit()) // used to only update value when enter key is pressed or when user clicks away from screen.
+		{
+			controlPTR2->TD = TD2;
+		}
+
+		float sp2 = controlPTR2->Sp, co2 = controlPTR2->Co, pv2 = controlPTR2->Pv;
+		ImGui::SetNextItemWidth(60);
+		ImGui::SameLine();
+		ImGui::InputFloat("##co2", &co2, 0, 0, "%0.2f");
+		if (ImGui::IsItemDeactivatedAfterEdit() && !controlPTR2->AUTO) // used to only update value when enter key is pressed or when user clicks away from screen.
+		{
+			controlPTR2->Co = co2;
+		}
+		ImGui::SetNextItemWidth(60);
+		ImGui::SameLine();
+		ImGui::InputFloat("##sp2", &sp2, 0, 0, "%0.2f");
+		if (ImGui::IsItemDeactivatedAfterEdit() && controlPTR2->AUTO) // used to only update value when enter key is pressed or when user clicks away from screen.
+		{
+			controlPTR2->Sp = sp2;
+		}
+
+		ImGui::Checkbox("Controller Mode | Check = AUTO ", &controlPTR2->AUTO);
+		ImGui::SameLine();
+		ImGui::Checkbox("Controller Action | Check = direct acting ", &controlPTR2->direct_acting);
+
+
+		//3rd controller
+		static float kc3 = controlPTR3->Gain, TI3 = controlPTR3->TI, TD3 = controlPTR3->TD;
+		ImGui::Text("Kc(Gain)  |  TI(Intergral)  |  TD(Derivative)");
+		ImGui::SameLine();
+		ImGui::Text("	Co  |  Sp");
+
+		ImGui::SetNextItemWidth(70);
+		ImGui::InputFloat("##c13", &kc3, 0, 0, "%0.3f");
+		if (ImGui::IsItemDeactivatedAfterEdit()) // used to only update value when enter key is pressed or when user clicks away from screen.
+		{
+			controlPTR3->Gain = kc3;
+		}
+		ImGui::SetNextItemWidth(120);
+		ImGui::SameLine();
+		ImGui::InputFloat("##c23", &TI3, 0, 0, "%0.3f");
+		if (ImGui::IsItemDeactivatedAfterEdit()) // used to only update value when enter key is pressed or when user clicks away from screen.
+		{
+			controlPTR3->TI = TI3;
+		}
+
+		ImGui::SetNextItemWidth(110);
+		ImGui::SameLine();
+		ImGui::InputFloat("##c33", &TD3, 0, 0, "%0.3f");
+		if (ImGui::IsItemDeactivatedAfterEdit()) // used to only update value when enter key is pressed or when user clicks away from screen.
+		{
+			controlPTR3->TD = TD3;
+		}
+
+		float sp3 = controlPTR3->Sp, co3 = controlPTR3->Co, pv3 = controlPTR3->Pv;
+		ImGui::SetNextItemWidth(60);
+		ImGui::SameLine();
+		ImGui::InputFloat("##co3", &co3, 0, 0, "%0.2f");
+		if (ImGui::IsItemDeactivatedAfterEdit() && !controlPTR3->AUTO) // used to only update value when enter key is pressed or when user clicks away from screen.
+		{
+			controlPTR3->Co = co3;
+		}
+		ImGui::SetNextItemWidth(60);
+		ImGui::SameLine();
+		ImGui::InputFloat("##sp3", &sp3, 0, 0, "%0.2f");
+		if (ImGui::IsItemDeactivatedAfterEdit() && controlPTR3->AUTO) // used to only update value when enter key is pressed or when user clicks away from screen.
+		{
+			controlPTR3->Sp = sp3;
+		}
+
+		ImGui::Checkbox("Controller Mode | Check = AUTO  ", &controlPTR3->AUTO);
+		ImGui::SameLine();
+		ImGui::Checkbox("Controller Action | Check = direct acting  ", &controlPTR3->direct_acting);
+
 		ImGui::End();
+
+
 	}
 
 	// Debug window for testing purposes.
 	{
 		ImGui::Begin("Debug Window"); // Create a window for the process.
 
-		ImGui::Text("Mo: %0.3f", controlPTR->Mo);
+		ImGui::Text("slope of Co: %0.9f", controlPTR->saved_slope);
 
-		ImGui::Text("Guessed Kp: %0.3f", controlPTR->guessed_Kp);
-		
+		ImGui::Text("plant parameters: %0.3f  %0.3f %0.3f", controlPTR->Sa1, controlPTR->Sb1, controlPTR->Sc1);
+		ImGui::Text("controller guess error: %0.3f", controlPTR->errorsaved);
+		ImGui::Text("Speedx M/s: %0.3f", ProcessPTR->state.u);
+		ImGui::Text("Speedy M/s: %0.3f", ProcessPTR->state.v);
+		ImGui::Text("Speedz M/s: %0.3f", ProcessPTR->state.w);
+		ImGui::Text("AoA: % 0.3f",(atan2(ProcessPTR->state.w, ProcessPTR->state.u)*180)/3.141592653589);
+		ImGui::Text("pitch: %0.3f", ProcessPTR->state.theta*180/3.141592653589);
+		ImGui::Text("timetorun: %0.5f", controlPTR->timetorun *1000 * 1000);
+
+
+		double throt = ProcessPTR->throttle;
+		ImGui::InputDouble("Throttle", &throt, 0, 0, "%0.1f");
+		if (ImGui::IsItemDeactivatedAfterEdit()) // used to only update value when enter key is pressed or when user clicks away from screen.
+		{
+			ProcessPTR->throttle = throt;
+			printf("plane values: %0.2lf %0.2lf %0.2lf %0.2lf %0.2lf %0.2lf %0.2lf %0.2lf %0.2lf %0.2lf %0.2lf %0.2lf \n", ProcessPTR->state.u, ProcessPTR->state.v, ProcessPTR->state.w, ProcessPTR->state.p, ProcessPTR->state.q, ProcessPTR->state.r, ProcessPTR->state.phi, ProcessPTR->state.theta, ProcessPTR->state.psi, ProcessPTR->state.x, ProcessPTR->state.y, ProcessPTR->state.z);
+			printf("controller2 values: %f %f \n", controlPTR2->oldintergrated, controlPTR2->prev_error);
+			printf("controller1 values: %f %f\n", controlPTR->oldintergrated, controlPTR->prev_error);
+			printf("controller3 values: %f %f\n", controlPTR3->oldintergrated, controlPTR3->prev_error);
+		}
+
 		ImGui::End();
 	}
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+bool used1 = false,used2 =false, used3 = false, used4 = false, used5 = false, used6 = false, used7 = false, used8 = false;
+void Test_Master(int point_pos)
+{
+	if (point_pos  % 10000 == 0 && !used1 && run)
+	{
+		controlPTR->Sp = 60;
+		used1 = true;
+		run = false;
+	}
+	if (point_pos % 10000 == 0 && !used2 && run)
+	{
+		controlPTR->Sp = 40;
+		used2 = true;
+		run = false;
+	}
+	if (point_pos % 10000 == 0 && !used5 && run)
+	{
+		ProcessPTR->rho -= 0.3;
+		run = false;
+		used5 = true;
+	}
+	if (point_pos % 10000 == 0 && !used6 && run)
+	{
+		ProcessPTR->wind_bias = 0.05;
+		run = false;
+		used6 = true;
+	}
+	if (point_pos % 10000 == 0 && (type_of_test == '3' || type_of_test == '4') && !used3 && run)
+	{
+		controlPTR->Sp = 50;
+		used3 = true;
+		run = false;
+	}
+	if (point_pos % 10000 == 0 && type_of_test == '4' && !used4 && run)
+	{
+		controlPTR->Sp = 65;
+		run = false;
+		used4 = true;
+	}
+	if (point_pos % 10000 == 0 && !used7 && run)
+	{
+		controlPTR->Sp = 55;
+		run = false;
+		used7 = true;
+	}
+	if (point_pos % 10000 == 0 && !used8 && run)
+	{
+		controlPTR->Sp = 45;
+		used8 = true;
+		run = false;
+	}
 }

@@ -71,11 +71,11 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>C:\Users\root\source\repos\Plant sim and Smart Controller\Fluid simulation\Libaries\Include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Users\root\source\repos\Plant sim and Smart Controller\Fluid simulation\Libaries\Include;C:\Users\root\source\repos\Plant sim and Smart Controller\Fluid simulation\Libaries\Include\eigen-3.4.1\Eigen;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Users\root\source\repos\Plant sim and Smart Controller\Fluid simulation\Libaries\Lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>C:\Users\root\source\repos\Plant sim and Smart Controller\Fluid simulation\Libaries\Include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Users\root\source\repos\Plant sim and Smart Controller\Fluid simulation\Libaries\Include;C:\Users\root\source\repos\Plant sim and Smart Controller\Fluid simulation\Libaries\Include\eigen-3.4.1\Eigen;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Users\root\source\repos\Plant sim and Smart Controller\Fluid simulation\Libaries\Lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -144,12 +144,15 @@
     <ClCompile Include="imgui_widgets.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Object.cpp" />
+    <ClCompile Include="SimView.cpp" />
     <ClCompile Include="Utility.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Controller.h" />
+    <ClInclude Include="FlightSim.h" />
     <ClInclude Include="Object.h" />
     <ClInclude Include="Rendering.h" />
+    <ClInclude Include="SimView.h" />
     <ClInclude Include="Utility.h" />
     <ClInclude Include="Processsim.h" />
     <ClInclude Include="Shader.h" />

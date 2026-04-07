@@ -94,11 +94,40 @@ void plotline::render(const Shader& shader, const Transformations& Transform, fl
 	shader.setmat4("view", Transform.viewtransform);
 	shader.setmat4("projection", Transform.projectiontransform);
 	glBindVertexArray(VAO);
+	if (!reachedmax)
+	{
+		glDrawArrays(GL_LINE_STRIP, 0, 0 + index_point_value);
+	}
+	else
+	{
+		int tailpoints = (Maximum_graphed_floats / 6) - (point_pos_step + 1);
+
+		glDrawArrays(GL_LINE_STRIP, point_pos_step + 1, tailpoints);
+		glDrawArrays(GL_LINE_STRIP, 0, 0 + point_pos_step+1);
+	}
+
+}
+void plotline::render(const Shader& shader, const Transformations& Transform) //overloaded function to only render not update
+{
+	shader.use();
+	glLineWidth(5.0f);
+	shader.setmat4("model", Transform.modeltransform);
+	shader.setmat4("view", Transform.viewtransform);
+	shader.setmat4("projection", Transform.projectiontransform);
+	glBindVertexArray(VAO);
 	glDrawArrays(GL_LINE_STRIP, 0, 0 + point_pos_step);
+
+	
 }
 
 void plotline::Update(float timestep, float input_value, float index_point_value)
 {
+	if (point_pos_step > Maximum_graphed_floats/6)
+	{
+		point_pos_step = -1;
+		reachedmax = true;
+	}
+	pointcount++;
 	point_pos_step++; //increments point step for point id.
 	Total_time = index_point_value * timestep; // adds timestep to total elapsed time.
 	float newpvvertice[6]
@@ -142,4 +171,38 @@ void Flag::render(const Shader& shader, const Transformations& Transform)
 	shader.setmat4("projection", Transform.projectiontransform);
 	glBindVertexArray(VAO);
 	glDrawArrays(GL_LINE_STRIP, 0, num_of_points_s);
+}
+
+Plane::Plane()
+{
+	float FLAG_VERTICES[18]
+	{
+		 0.0f,  0.0f,  5.0f,   1.0f, 0.0f, 0.0f, // Point 1: Nose
+		-2.0f,  0.0f, -2.0f,   0.8f, 0.0f, 0.0f, // Point 2: Back Left Wing (Slightly darker red for contrast)
+		 2.0f,  0.0f, -2.0f,   0.6f, 0.0f, 0.0f  // Point 3: Back Right Wing (Even darker red)
+	};
+
+	glGenVertexArrays(1, &VAO);//pv vao
+	glGenBuffers(1, &VBO);
+	glBindVertexArray(VAO);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);											//this section binds all the vbos to the standard VAO for redering the graph values.
+	glBufferData(GL_ARRAY_BUFFER, sizeof(FLAG_VERTICES), FLAG_VERTICES, GL_DYNAMIC_DRAW);// states how many vertices are in object/ how much information/space it will take.
+	// position attribute
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	// color attribute
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+	glEnableVertexAttribArray(1);
+	num_of_points_s = 3;
+}
+
+void Plane::render(const Shader& shader, const Transformations& Transform)
+{
+	shader.use();
+	glLineWidth(1.0f);
+	shader.setmat4("model", Transform.modeltransform);
+	shader.setmat4("view", Transform.viewtransform);
+	shader.setmat4("projection", Transform.projectiontransform);
+	glBindVertexArray(VAO);
+	glDrawArrays(GL_TRIANGLES, 0, num_of_points_s);
 }

@@ -7,6 +7,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+
+
 struct Transformations///contains all information of the 3 basic transforms
 {
 	glm::mat4 modeltransform = glm::mat4();
@@ -17,6 +19,7 @@ struct Transformations///contains all information of the 3 basic transforms
 struct Point_Data //contains all the main information for all points 
 {
 	float PVv = 0, Cov = 0, Spv = 0;
+	float a1 = 0, b1 = 0, c1 = 0, error, prediction;
 };
 
 double Getworldposfrommouse(GLFWwindow* window, float zoomlevel,float roundinglevel, double &cursorx, double &cursory, float camx, float monitorwidth, float monitorheight,float monitoroffset);
